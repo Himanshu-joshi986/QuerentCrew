@@ -1,0 +1,16 @@
+.env
+.git
+.venv
+venv
+__pycache__
+.pytest_cache
+outputs
+evals/results
+data/*.db
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.ruff_cache
+docs/RESUME_AND_INTERVIEW.md
+tests
+.github

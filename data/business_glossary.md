@@ -1,0 +1,8 @@
+- revenue = SUM(order_items.quantity * order_items.unit_price * (1 - order_items.discount)), counting only orders with orders.status = 'completed'
+- units sold = SUM(order_items.quantity) for completed orders
+- average order value (AOV) = revenue / COUNT(DISTINCT orders.order_id) for completed orders
+- region of an order = the customer's region (orders -> customers.region_id -> regions.name)
+- quarters: Q1 = Jan-Mar, Q2 = Apr-Jun, Q3 = Jul-Sep, Q4 = Oct-Dec; data covers calendar year 2025
+- return rate = returned orders / all orders (orders.status = 'returned')
+- customer segments: Consumer, SMB, Enterprise; channels: Online, Retail, Partner
+- product categories: Electronics, Furniture, Office Supplies, Software

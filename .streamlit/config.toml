@@ -1,0 +1,16 @@
+[server]
+headless = true
+maxUploadSize = 20
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "dark"
+primaryColor = "#818cf8"
+backgroundColor = "#070a13"
+secondaryBackgroundColor = "#111727"
+textColor = "#e5e7f0"

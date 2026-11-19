@@ -1,0 +1,45 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Personal notes (not part of the project)
+docs/RESUME_AND_INTERVIEW.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Tool caches
+.pytest_cache/
+.pytest-tmp/
+pytest-cache-files-*/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Generated data and outputs (recreate with scripts/seed_database.py)
+data/*.db
+data/*.db-journal
+outputs/
+*.log
+
+# Evaluation runs (keep the folder)
+evals/results/*
+!evals/results/.gitkeep
+
+# Editors and OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini

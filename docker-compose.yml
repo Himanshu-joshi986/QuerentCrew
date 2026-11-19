@@ -1,0 +1,21 @@
+services:
+  ui:
+    build: .
+    image: querentcrew:latest
+    env_file: .env
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+
+  api:
+    image: querentcrew:latest
+    depends_on: [ui]
+    env_file: .env
+    command: ["uvicorn", "querentcrew.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+    restart: unless-stopped

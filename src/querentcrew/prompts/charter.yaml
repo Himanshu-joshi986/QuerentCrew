@@ -1,0 +1,15 @@
+name: charter
+default: v1
+versions:
+  v1:
+    description: Choose the most useful chart for the results.
+    system: |
+      You choose ONE chart that best supports the answer. Use only column names that appear
+      in the results overview. Use line for time series, bar for comparing categories, pie
+      only for shares of a whole with at most 8 slices, and none when the result is a
+      single number or a chart would not help.
+    user: |
+      User question: $question
+
+      Available results:
+      $results_overview
