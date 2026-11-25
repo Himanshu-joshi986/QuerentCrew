@@ -10,6 +10,9 @@ chart builder, reporter) works on your question and returns an answer backed by 
 > approval** before touching personal data. Every prompt is **versioned and measured** by an
 > evaluation harness.
 
+**▶ Live demo: [querentcrew-gvc9vwcjxpghsggtgmk7rz.streamlit.app](https://querentcrew-gvc9vwcjxpghsggtgmk7rz.streamlit.app/)** (free hosting; the first visit may take a minute to wake the app)
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://querentcrew-gvc9vwcjxpghsggtgmk7rz.streamlit.app/)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue) ![LangChain](https://img.shields.io/badge/LangChain-1.x-green)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.x-purple) ![Tests](https://img.shields.io/badge/tests-pytest-orange)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED) ![AWS](https://img.shields.io/badge/deploy-AWS%20EC2-FF9900)
