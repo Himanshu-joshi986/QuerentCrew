@@ -98,12 +98,12 @@ Sample chart generated from the bundled data:
 - **Defence-in-depth SQL safety:** rule-based guard, read-only SQLite URI, SQLite authorizer, query timeout, row cap
 - **PII governance:** approval gate + automatic masking of personal columns
 - **Versioned prompt registry:** YAML prompts, three SQL-writer versions (zero-shot → rules + glossary → few-shot + reasoning)
-- **Evaluation harness:** execution accuracy on 40 gold questions (20 dev + 20 held-out, written after the prompts were frozen), repeated runs with mean and range, file fingerprints, leakage tests, resumable runs
+- **Evaluation harness:** execution accuracy on 40 gold questions (20 dev + 20 held-out, written after the prompts were frozen), 3 runs per question, a grader validated by mutation testing and checked on 5 extra databases and by manual review, 95% intervals and paired tests, free re-grading of the published answers, file fingerprints, leakage tests, resumable runs
 - **Model-agnostic:** Groq, Gemini, OpenAI, Ollama (local), Anthropic or Bedrock via `init_chat_model`; automatic retry and optional fallback model
 - **Observability:** token/latency tracking per agent, step trace in the UI, optional LangSmith tracing
 - **Data integration:** upload any CSV; Pandas cleans headers and infers types, and it becomes a queryable table
 - **Three interfaces:** Streamlit chat UI, FastAPI REST API (with OpenAPI docs), terminal CLI
-- **Engineering:** OOP with dependency injection, 77 pytest tests that need **no API key**, Docker, Docker Compose, GitHub Actions CI, AWS deployment guide
+- **Engineering:** OOP with dependency injection, 83 pytest tests that need **no API key**, Docker, Docker Compose, GitHub Actions CI, AWS deployment guide
 
 ## 4. Architecture
 
@@ -200,7 +200,46 @@ in the evaluation harness.
 ## 8. Evaluation
 
 The evaluation answers one question: **does each prompt version write SQL that returns the right
-data?** It was designed so that anyone can rerun it and check the numbers.
+data?** It is built so that anyone can rerun it, re-grade it for free and check every verdict.
+
+### Results at a glance
+
+Model `groq:openai/gpt-oss-120b`, temperature 0, 40 questions × 3 prompt versions × 3 runs = 360
+answers. Accuracy is the mean over the 3 runs.
+
+| Suite | Prompt | Original grader (as recorded) | Corrected grader, checked on 6 databases | 95% interval | Manual review (ambiguous counted wrong – right) |
+|---|---|---|---|---|---|
+| dev | v1 zero-shot | 35.0% | 40.0% | 21.9–61.3% | 45.0% |
+| dev | v2 + glossary and rules | 81.7% | 90.0% | 69.9–97.2% | 86.7–91.7% |
+| dev | v3 + few-shot examples | 90.0% | 96.7% | 78.7–99.6% | 95.0–100.0% |
+| holdout | v1 zero-shot | 50.0% | 60.0% | 38.7–78.1% | 63.3% |
+| holdout | v2 + glossary and rules | 100.0% | 100.0% | 83.9–100.0% | 100.0% |
+| holdout | v3 + few-shot examples | 100.0% | 100.0% | 83.9–100.0% | 100.0% |
+
+What the numbers say:
+
+- **The business glossary (v1 → v2) is the large, statistically clear gain.** Most v1 errors count
+  returned and cancelled orders as revenue: v1 has no way to know the company's rule that revenue
+  means completed orders only. v2 was better on 12 dev questions and worse on 1 (sign test p = 0.003),
+  and better on 9 holdout questions and worse on none (p = 0.004).
+- **Few-shot examples (v2 → v3) add little, and the gain is not statistically significant.** On dev,
+  v3 was better on 2 questions and worse on 1 (p = 1.0); on holdout both scored 100%. v3 costs about
+  16% more tokens per question than v2 (1,501 vs 1,295 on dev) and was slower on dev (8.9 s vs 6.1 s
+  per question).
+- **Holdout did not drop below dev**, so the prompts were not fitted to the dev questions. Holdout
+  scores are higher partly because its questions were checked for ambiguity before the run and the
+  dev questions were not (dev q20 turned out to have two readings, see below).
+- **The self-correction loop was needed once in 360 answers** (holdout, v1, h14: a SQL error on the
+  first try, fixed on the second). Strong models rarely write SQL that fails to run, so first-try and
+  final accuracy are almost identical.
+- With 20 questions per suite, intervals are wide: 20/20 is consistent with a true accuracy anywhere
+  from about 84% to 100%. The numbers compare prompt versions on this task; they are not a general
+  benchmark score.
+
+Full reports: [`latest_report.md`](evals/results/latest_report.md) (the original run),
+[`regrade_report.md`](evals/results/regrade_report.md) (re-grading, grader checks, intervals,
+per-question table) and [`audit_evidence.md`](evals/results/audit_evidence.md) (every wrong answer
+with its result next to the correct result).
 
 ### Test sets
 
@@ -209,84 +248,150 @@ data?** It was designed so that anyone can rerun it and check the numbers.
 | `dev` | `evals/dataset.json` | 20 (5 easy, 8 medium, 7 hard) | Questions the prompts were developed against |
 | `holdout` | `evals/holdout.json` | 20 (5 easy, 8 medium, 7 hard) | Written **after the prompts were frozen** and never used for tuning, so it measures how well the prompts generalise to questions they weren't built for |
 
-Every question has a hand-written **gold SQL** query. The correct answer is whatever that query returns
-from the database, so the answer key is computed, not judged. Held-out questions were checked for
-ambiguity: no ties in "top N" questions, no answers of 0 that a broken query could hit by accident,
-and wording with only one reasonable reading.
+Every question has a hand-written **gold SQL** query that follows the definitions in
+`data/business_glossary.md`. The correct answer is whatever that query returns from the database, so
+the answer key is computed, not judged. Held-out questions were checked for ambiguity: no ties in
+"top N" questions, no answers of 0 that a broken query could hit by accident, and wording with only
+one reasonable reading.
 
 ### Metric: execution accuracy
 
-The model's SQL is run, and its result rows are compared with the gold rows. This is the standard
-metric of public text-to-SQL benchmarks such as Spider and BIRD. Column names and order may differ,
-and extra columns are allowed. Values must match after rounding to one decimal place. Row order only
-counts for rankings and time series. No person or LLM judges an answer.
+The model's SQL is run and its result rows are compared with the gold rows. This is the standard
+metric of public text-to-SQL benchmarks such as Spider and BIRD. Column names and order may differ
+and extra columns are allowed. Row order only counts for rankings and time series. No person or LLM
+judges an answer.
 
-The report includes:
-- **first-try accuracy** and **final accuracy** (after the self-correction loop), per suite and per difficulty
-- the **mean and min–max range over repeated runs** (LLM output varies slightly even at temperature 0)
-- errors, blocked queries, average attempts, tokens and latency
-- **every wrong answer, with the SQL the model wrote**
-- provider failures (rate limits, outages), retried with back-off and **not** counted as wrong,
-  because they measure the API, not the prompt
+Two versions of the number comparison exist, both in `src/querentcrew/evaluation.py`:
+
+| Grader | Rule | Problem |
+|---|---|---|
+| `round1` (original, used during the run) | numbers equal after rounding to 1 decimal place | Far too coarse for small values such as rates: 0.046 vs 0.05 fails, 0.05 vs 0.14 passes |
+| `tolerance` (corrected, current) | whole numbers must be equal; other numbers may differ by at most 0.01%, or by rounding (if one side was rounded, the other must round to it, with an allowance of at most 0.005) | — |
+
+**Why the grader was changed after the run, and why that is not tuning.** The flaw was found while
+auditing the results: in every v2 and v3 run, the model's return rate of 0.05 for a true value of
+0.046 was marked wrong. Changing a grader after seeing results could be used to inflate them, so:
+
+1. the original grader and its numbers are kept and shown first, unchanged;
+2. the corrected grader was validated on the gold queries alone, without model answers (next
+   section): it rejects every broken query and accepts every harmless rewrite, while the original
+   grader fails both checks;
+3. the correction moves verdicts both ways in principle (0.05 vs 0.14 now fails), and every changed
+   verdict is listed with the actual result rows in `regrade_report.md`: 18 answers, all wrong →
+   correct; on inspection 15 are clearly correct and 3 are the ambiguous q20 case described below;
+4. both graders run on the same saved answers, so anyone can compare them with one command.
+
+### How we know the grader is right
+
+| Check | What it does | Result |
+|---|---|---|
+| Reproducibility | Re-grades the 360 saved answers with the original grader | Same verdict for **360/360** |
+| Mutation testing of the grader | Breaks each gold query on purpose (wrong status filter, missing discount, SUM→AVG, wrong region, shifted dates, off-by-one LIMIT, …) and must reject it; makes harmless rewrites (columns reordered, extra column, rounding changed) and must accept them | Corrected: **189/189** broken rejected, **126/126** rewrites accepted. Original: 185/189 and 121/126 |
+| Test-suite accuracy (Zhong et al., 2020) | Re-runs every answer marked correct, and its gold query, on **5 extra databases** generated with different random seeds, to catch queries that were right only by luck on one dataset | **0** verdicts changed |
+| Manual review | Every answer marked wrong, every changed verdict and a random sample of 20 marked correct (106 of 360 answers), checked by hand | Grader agrees on **95 of 100** unambiguous answers; **0** false positives; 5 false negatives; 6 ambiguous |
+
+The 5 false negatives are correct answers in a different format, which the grader cannot know are
+equal: quarters as `1` instead of `Q1` (holdout v1 h09, 2 runs), `Q2 2025` instead of `Q2` (dev v1
+q17, 1 run), and a return rate as a percentage instead of a fraction (dev v1 q13, 2 runs). The 6
+ambiguous answers are dev **q20**, *"What is the average discount given in each product category?"*:
+v2 and v3 averaged over completed orders only, the gold query over all orders, and the glossary does
+not decide it. The grader was **not** changed to accept these cases, because that would be fitting
+the grader to the answers. They are reported in the "manual review" column instead, with q20 shown
+both ways. Labels and reasons are in [`evals/manual_review.json`](evals/manual_review.json).
+
+The mutation tests run in CI (`tests/test_evaluation.py`), so a future change to the grader that
+starts accepting wrong queries fails the build.
+
+### Uncertainty
+
+- **The questions, not the runs, are the sample.** Each question's score is its mean over the 3 runs
+  and intervals use n = 20 questions, so repeated runs are not counted as extra evidence.
+- **95% Wilson score intervals**, which stay sensible at 0% and 100% with small samples (the usual
+  normal-approximation interval would give 100% ± 0 for 20/20).
+- **Paired comparisons:** prompt versions are compared question by question with an exact sign test,
+  as recommended for model evals that share the same questions.
+
+| Suite | Comparison | Questions better | Worse | Same | Sign-test p |
+|---|---|---|---|---|---|
+| dev | v1 → v2 | 12 | 1 | 7 | 0.0034 |
+| dev | v2 → v3 | 2 | 1 | 17 | 1.0000 |
+| holdout | v1 → v2 | 9 | 0 | 11 | 0.0039 |
+| holdout | v2 → v3 | 0 | 0 | 20 | 1.0000 |
 
 ### Safeguards against a biased result
 
+- **Inputs were fixed before the results existed, and that is verifiable.** The prompts, glossary
+  and both question sets used in the final run have the same content as commit `fb88019` (`git diff
+  fb88019` shows no change to them),
+  pushed to GitHub on **2026-11-19 20:34 UTC**. The final run started on 2026-11-20 and its report
+  was produced on 2026-11-24. Push times are recorded by GitHub, not by the author's machine:
+  `gh api repos/Himanshu-joshi986/QuerentCrew/activity`.
 - **No test question appears in a prompt.** One v3 example (*"Total revenue by region in 2025"*)
   originally matched a dev question. It was replaced before the final run, and
   `test_no_test_question_leaks_into_prompt_examples` now fails if any example comes close to a test question.
 - **Dev and holdout don't overlap.** `test_dev_and_holdout_do_not_overlap` checks this. It caught a
   held-out question that differed from a dev question by one word, and that question was replaced.
-- **Inputs are frozen and fingerprinted.** The report lists SHA-256 hashes of the prompts, glossary,
-  both test sets and the database. The database hash covers its data, not the file bytes, so a
-  database regenerated with `scripts/seed_database.py` (fixed seed 42) gets the same fingerprint.
-- **Every run is reported.** The final numbers come from one command with `--fresh`; no run was
-  chosen or discarded.
+- **Inputs are fingerprinted.** Reports list SHA-256 hashes of the prompts, glossary, both test sets
+  and the database. The database hash covers its data, not the file bytes, so a database regenerated
+  with `scripts/seed_database.py` (fixed seed 42) gets the same fingerprint. Text files are hashed
+  with line endings normalised, so Windows and Linux checkouts match. (The original report lists
+  `sql_writer.yaml` as `e17a296d…`, the hash of the same file with Windows line endings; normalised it
+  is `28c5916d…`. `regrade.py` accepts either.)
+- **Every run is reported.** The numbers come from one run started with `--fresh` and resumed
+  (without `--fresh`) when the provider's daily quota ran out. No run was chosen or discarded, and
+  every saved answer is published in `evals/results/checkpoint.jsonl`.
 
 ### Reproduce it
 
 ```bash
 python scripts/seed_database.py                  # same data for everyone (fixed seed)
-python evals/run_eval.py --fingerprints          # compare with the hashes in the results below
-python evals/run_eval.py --repeats 3 --fresh     # both suites, v1 v2 v3, 3 runs
+python evals/run_eval.py --fingerprints          # compare with the hashes in the reports
+python evals/regrade.py                          # re-grade the saved answers: free, no API key, ~1 minute
+python evals/run_eval.py --repeats 3 --fresh     # optional: a new run (both suites, v1 v2 v3, 3 runs)
 ```
 
-Results are saved after every question (`evals/results/checkpoint.jsonl`). If the provider's daily
+`regrade.py` needs no API key. It checks the input fingerprints, reproduces the original verdicts,
+applies the corrected grader, the 5 extra databases and the manual review, and writes
+`regrade_report.md` and `audit_evidence.md`.
+
+A new run saves every answer as it goes (`evals/results/checkpoint.jsonl`). If the provider's daily
 quota runs out (Groq's free tier allows 200k tokens/day for `gpt-oss-120b`, and one full run uses
-about 130–150k), the run stops cleanly. Run the same command **without** `--fresh` later and it
-continues where it stopped. The report is only written once every question has been graded. The
-saved progress is tied to the model, settings and file fingerprints, so a resumed run can't mix in
-answers from different inputs.
+about 130–150k), the run stops cleanly; run the same command **without** `--fresh` later and it
+continues where it stopped. Saved progress is tied to the model, settings, grader and file
+fingerprints, so a resumed run can't mix answers from different inputs or graders. A rerun with the
+same model should land within the reported intervals; a different model gives different numbers,
+because the harness measures model plus prompt together.
 
-A rerun with the same model should land within the reported range. A different model gives
-different numbers, which is expected, because the harness measures model plus prompt together.
+### Reading the reports
 
-### Reading the report
-
-`evals/results/latest_report.md` contains, for each suite (`dev`, `holdout`):
-
-| Column | Meaning |
+| File | Contents |
 |---|---|
-| `first_try_accuracy_pct` | correct without any retry |
-| `final_accuracy_pct` | correct after the self-correction loop (mean over runs) |
-| `final_accuracy_range` | lowest and highest accuracy across the repeated runs |
-| `easy` / `medium` / `hard_accuracy_pct` | accuracy by difficulty |
-| `errors_or_blocked`, `avg_attempts` | how often the SQL failed or was rejected, and how many tries it took |
-| `avg_tokens`, `avg_latency_ms` | cost and speed per question |
-| `provider_failures` | API failures, reported but not scored |
-
-It ends with every incorrect answer (the question and the SQL the model wrote) and the input
-fingerprints. The **dev vs holdout** gap shows how much of the prompt quality carries over to unseen
-questions, and **v1 → v2 → v3** shows what the glossary and few-shot examples add.
+| `evals/results/latest_report.md` | The original run: accuracy per suite and prompt version (first-try, final, by difficulty, run range), errors, attempts, tokens, latency, every wrong answer with its SQL, fingerprints |
+| `evals/results/regrade_report.md` | Reproducibility check, grader mutation tests, accuracy under each grader with 95% intervals, grader-vs-manual agreement, paired comparisons, per-question table, every changed verdict |
+| `evals/results/audit_evidence.md` | For each wrong answer: the gold result next to the model's result; plus the random sample of correct answers |
+| `evals/manual_review.json` | The manual labels that differ from the grader, with reasons |
 
 With `LANGSMITH_TRACING=true`, every agent call appears in LangSmith as `querentcrew.<agent>`, so you
 can inspect the exact prompts behind each score.
+
+### What this evaluation does and does not show
+
+- It **does** show, with checked grading, that the glossary and rules (v2) make the SQL agent far
+  more accurate on this database, and that the gain holds on questions written after the prompts
+  were frozen.
+- It **does not** show that v3's few-shot examples help: the measured gain is within noise.
+- It uses **one model, one small synthetic database and 40 questions**. It is a controlled
+  comparison of prompt versions, not a general text-to-SQL benchmark score.
+- It measures **SQL correctness only**, not the quality of the written report or the charts.
+- The gold queries and the manual review were written by the same person who built the system. Both
+  are published so they can be checked independently.
 
 ## 9. Tech stack
 
 | Area | Tools |
 |---|---|
 | Agents and orchestration | LangChain 1.x (`init_chat_model`, structured output, retry/fallback), LangGraph 1.x (`StateGraph`, `interrupt`, `Command`, checkpointer) |
-| LLMs | Groq (Llama 3.3 70B, free tier), Gemini, OpenAI, Ollama (local), Bedrock (optional) |
+| LLMs | Groq (`openai/gpt-oss-120b`, free tier; used for the evaluation), Gemini, OpenAI, Anthropic, Ollama (local), Bedrock (optional) |
 | Observability | LangSmith (optional), built-in `UsageTracker` |
 | Data | SQLite, Pandas, NumPy |
 | Charts | Altair / Vega-Lite (interactive, in the UI), Matplotlib (PNG for API and CLI) |
@@ -314,7 +419,8 @@ querentcrew/
 │   ├── sql_safety.py             # SQLGuard + PII masking
 │   ├── analysis.py               # Pandas/NumPy profiler
 │   ├── charts.py                 # chart spec validation + heuristic fallback, Matplotlib PNG renderer
-│   ├── evaluation.py             # execution-accuracy evaluator
+│   ├── evaluation.py             # execution-accuracy evaluator, graders, intervals, fingerprints
+│   ├── grader_validation.py      # mutation tests that check the grader itself
 │   ├── api.py                    # FastAPI app
 │   ├── __main__.py               # CLI: python -m querentcrew
 │   └── prompts/                  # registry.py + versioned YAML prompts
@@ -322,10 +428,12 @@ querentcrew/
 │   ├── dataset.json              # dev suite: 20 gold questions
 │   ├── holdout.json              # held-out suite: 20 gold questions written after the prompts were frozen
 │   ├── run_eval.py               # compare prompt versions (repeats, resume, fingerprints)
-│   └── results/                  # generated reports
+│   ├── regrade.py                # re-grade saved answers for free: grader checks, extra databases, intervals
+│   ├── manual_review.json        # manual labels that differ from the grader, with reasons
+│   └── results/                  # published reports and every saved answer (checkpoint.jsonl)
 ├── data/business_glossary.md     # metric definitions used in prompts
 ├── scripts/seed_database.py      # reproducible sample database with a planted story
-├── tests/                        # 77 tests, fake LLM, no API key needed
+├── tests/                        # 83 tests, fake LLM, no API key needed
 ├── docs/DEPLOY_AWS.md            # step-by-step AWS deployment
 ├── Dockerfile, docker-compose.yml, Makefile, pyproject.toml, requirements.txt
 └── .github/workflows/ci.yml      # lint + tests on 3.11/3.12 + Docker build
@@ -473,7 +581,7 @@ network:
 | `test_prompts.py` | every prompt version renders with no missing variables |
 | `test_nodes.py` | retry with error feedback, guard rewrite, retries exhausted, approval/rejection, masking, chart fallback when the model declines |
 | `test_graph.py` | full pipeline, self-correction, interrupt/resume, rejection path, multi-turn memory |
-| `test_evaluation.py` | result matching, gold SQL validity (dev + holdout), no prompt/test leakage, no dev/holdout overlap, rate-limit retry, daily-quota stop, report writing |
+| `test_evaluation.py` | result matching under both graders, number tolerance, grader mutation tests (every broken gold query rejected, every harmless rewrite accepted), gold SQL validity (dev + holdout), no prompt/test leakage, no dev/holdout overlap, line-ending-independent fingerprints, Wilson interval and sign test, rate-limit retry, daily-quota stop, report writing |
 | `test_api.py` | REST endpoints including the ask → approve flow |
 | `test_llm_errors.py` | provider error classification, fail-fast with a clear message when the model is unreachable or drops mid-run, step-by-step progress streaming |
 
@@ -525,7 +633,7 @@ the next restart. Everyone who opens a public app uses your API quota, so use a 
 - PII detection is by column name (`PII_COLUMNS`). Next: value-based detection (email/phone patterns).
 - CSV dates are stored as given. Next: normalise date columns to ISO `YYYY-MM-DD` on import.
 - The prompts' few-shot examples are sales-specific. Next: generate examples from the glossary per dataset.
-- The evaluation measures SQL accuracy only. Next: LLM-as-judge scoring of report quality.
+- The evaluation measures SQL accuracy only, on one model and 40 questions. Next: more questions per suite (narrower intervals), a second model, and LLM-as-judge scoring of report quality validated against human ratings.
 - Next features: a schema-RAG retriever for databases with hundreds of tables, scheduled report emails.
 
 ---

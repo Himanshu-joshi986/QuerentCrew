@@ -28,7 +28,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from querentcrew.config import get_settings  # noqa: E402
 from querentcrew.database import DatabaseManager  # noqa: E402
-from querentcrew.evaluation import DailyQuotaReached, EvalRecord, SQLEvaluator, fingerprints  # noqa: E402
+from querentcrew.evaluation import (  # noqa: E402
+    DailyQuotaReached, EvalRecord, SQLEvaluator, fingerprints, same_inputs)
 from querentcrew.llm import LangChainLLM  # noqa: E402
 from querentcrew.nodes import AgentNodes  # noqa: E402
 
@@ -69,15 +70,18 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     checkpoint = out / "checkpoint.jsonl"
     config = {"model": settings.llm_model, "temperature": settings.llm_temperature,
-              "max_sql_retries": settings.max_sql_retries, "fingerprints": prints}
+              "max_sql_retries": settings.max_sql_retries, "grader": "tolerance", "fingerprints": prints}
 
     records: list[EvalRecord] = []
     if checkpoint.exists() and not args.fresh:
         lines = checkpoint.read_text(encoding="utf-8").splitlines()
         saved = json.loads(lines[0]) if lines else {}
-        if saved.get("config") != config:
-            sys.exit("Saved progress in evals/results/checkpoint.jsonl was made with a different model, settings "
-                     "or input files. Rerun with --fresh to start over.")
+        saved_cfg = {"grader": "round1", **saved.get("config", {})}  # checkpoints without a grader used round1
+        settings_match = {k: v for k, v in saved_cfg.items() if k != "fingerprints"} ==             {k: v for k, v in config.items() if k != "fingerprints"}
+        if not settings_match or not same_inputs(saved_cfg.get("fingerprints", {}), input_files(settings)):
+            sys.exit("Saved progress in evals/results/checkpoint.jsonl was made with a different model, settings, "
+                     "grader or input files. Rerun with --fresh to start over, or re-grade the saved answers "
+                     "without any API calls: python evals/regrade.py")
         # provider failures are not kept: they are retried on resume
         records = [EvalRecord(**json.loads(line)) for line in lines[1:]]
         records = [r for r in records if r.status != "llm_error"]

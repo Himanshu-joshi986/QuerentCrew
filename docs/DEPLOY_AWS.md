@@ -73,7 +73,9 @@ Connect via EC2 Instance Connect, Session Manager or `ssh -i key.pem ubuntu@<pub
 ```bash
 # Docker + compose plugin
 sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-v2 git awscli
+sudo apt-get install -y docker.io docker-compose-v2 git
+sudo snap install aws-cli --classic   # the awscli apt package is not in Ubuntu 24.04
+sudo systemctl enable --now docker   # start Docker on every boot
 sudo usermod -aG docker ubuntu && newgrp docker
 
 # 1 GB of RAM is tight for installing the Python packages: add 2 GB of swap
@@ -113,6 +115,35 @@ Update after a `git push`:
 ```bash
 git pull && docker compose up -d --build
 ```
+
+## 6b. Start and stop it on demand
+
+Both containers use `restart: unless-stopped` and Docker starts on boot, so **starting the instance
+brings the app back by itself**. Nothing needs to be run on the server. A stopped instance has no
+compute charge; its disk still costs a little.
+
+From your own computer, with the AWS CLI installed and configured (`aws configure`):
+
+```bash
+REGION=ap-south-1
+ID=$(aws ec2 describe-instances --region $REGION --filters "Name=tag:Name,Values=querentcrew" \
+     --query "Reservations[0].Instances[0].InstanceId" --output text)
+
+# start, wait until it runs, print the URL
+aws ec2 start-instances --instance-ids $ID --region $REGION
+aws ec2 wait instance-running --instance-ids $ID --region $REGION
+echo "http://$(aws ec2 describe-instances --instance-ids $ID --region $REGION \
+     --query 'Reservations[0].Instances[0].PublicIpAddress' --output text):8501"
+
+# stop when you're done
+aws ec2 stop-instances --instance-ids $ID --region $REGION
+```
+
+Or use the EC2 console: select the instance → *Instance state* → *Start* / *Stop*.
+
+The public IP **changes every time the instance starts**, so read it from the command above (or the
+console). Give the app about a minute after the instance starts. For a fixed address, attach an
+Elastic IP; it is billed by the hour while allocated, so release it when you no longer need it.
 
 ## 7. (Optional) Back up the database and uploaded tables to S3
 

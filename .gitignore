@@ -5,7 +5,9 @@
 .streamlit/secrets.toml
 
 # Personal notes (not part of the project)
+CLAUDE.local.md
 docs/RESUME_AND_INTERVIEW.md
+docs/INTERVIEW_QA.md
 
 # Python
 __pycache__/
@@ -32,9 +34,14 @@ data/*.db-journal
 outputs/
 *.log
 
-# Evaluation runs (keep the folder)
+# Evaluation runs: ignored by default, except the published results the README links to
 evals/results/*
 !evals/results/.gitkeep
+!evals/results/latest_report.md
+!evals/results/regrade_report.md
+!evals/results/audit_evidence.md
+!evals/results/regrade_summary.json
+!evals/results/checkpoint.jsonl
 
 # Editors and OS
 .vscode/

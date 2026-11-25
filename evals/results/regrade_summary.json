@@ -1,0 +1,71 @@
+{
+  "model": "groq:openai/gpt-oss-120b",
+  "fingerprints": {
+    "prompts/sql_writer.yaml": "28c5916da7a91d420c0ef4d1f5a2c0eedab4ffb6addea2493b1d074b2728650c",
+    "data/business_glossary.md": "d90a8ab8b495b7bfaceec9d7328be6b9b8d36447357e0ea1c8838c47dda56e08",
+    "evals/dataset.json": "9ea27a6b24f0cf33895ac026cc0e0b37d6f4667bb98af5c3d22a3dc3f92c6646",
+    "evals/holdout.json": "a20a66c0ef2aeca0330f7b349e5af77e06f69b3b5054915e976f146367c8e1b7",
+    "data/sales.db": "08a736137fd640659a130ebd15bd8e83693ca9c8ba989934242df2874e22b99c"
+  },
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "accuracy_pct": {
+    "dev": {
+      "v1": {
+        "recorded": 35.0,
+        "round1": 35.0,
+        "tolerance": 40.0,
+        "test_suite": 40.0,
+        "manual_strict": 45.0,
+        "manual_lenient": 45.0
+      },
+      "v2": {
+        "recorded": 81.7,
+        "round1": 81.7,
+        "tolerance": 90.0,
+        "test_suite": 90.0,
+        "manual_strict": 86.7,
+        "manual_lenient": 91.7
+      },
+      "v3": {
+        "recorded": 90.0,
+        "round1": 90.0,
+        "tolerance": 96.7,
+        "test_suite": 96.7,
+        "manual_strict": 95.0,
+        "manual_lenient": 100.0
+      }
+    },
+    "holdout": {
+      "v1": {
+        "recorded": 50.0,
+        "round1": 50.0,
+        "tolerance": 60.0,
+        "test_suite": 60.0,
+        "manual_strict": 63.3,
+        "manual_lenient": 63.3
+      },
+      "v2": {
+        "recorded": 100.0,
+        "round1": 100.0,
+        "tolerance": 100.0,
+        "test_suite": 100.0,
+        "manual_strict": 100.0,
+        "manual_lenient": 100.0
+      },
+      "v3": {
+        "recorded": 100.0,
+        "round1": 100.0,
+        "tolerance": 100.0,
+        "test_suite": 100.0,
+        "manual_strict": 100.0,
+        "manual_lenient": 100.0
+      }
+    }
+  }
+}

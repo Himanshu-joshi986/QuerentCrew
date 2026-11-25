@@ -1,0 +1,25 @@
+{
+  "about": "Manual review of the saved answers. Reviewed: every answer the corrected grader marks wrong, every answer whose verdict changed between graders, and a random sample of 20 answers marked correct (seed 7). Only answers where the reviewer's verdict differs from the corrected grader, or where the question allows more than one reading, are listed; every other reviewed answer agrees with the grader. Evidence for each case (gold result next to the model's result) is in evals/results/audit_evidence.md after running python evals/regrade.py. Labels: correct, wrong, ambiguous.",
+  "labels": [
+    {
+      "suite": "dev", "version": "v1", "id": "q13", "runs": [2, 3], "manual": "correct",
+      "reason": "Return rate given as a percentage (4.6) instead of a fraction (0.046). Same values; only the unit differs."
+    },
+    {
+      "suite": "dev", "version": "v1", "id": "q17", "runs": [3], "manual": "correct",
+      "reason": "Labels 'Q2 2025'/'Q3 2025' instead of 'Q2'/'Q3'. Same filters and identical revenue values."
+    },
+    {
+      "suite": "holdout", "version": "v1", "id": "h09", "runs": [1, 2], "manual": "correct",
+      "reason": "Quarters numbered 1-4 instead of 'Q1'-'Q4'. Identical counts."
+    },
+    {
+      "suite": "dev", "version": "v2", "id": "q20", "runs": [1, 2, 3], "manual": "ambiguous",
+      "reason": "Averages the discount over completed orders only (gold: all orders). 'Discount given' can reasonably mean completed sales only and the glossary does not define it. Runs 1 and 3 round to 0.05, which the corrected grader accepts; run 2 answers in percent, which it rejects."
+    },
+    {
+      "suite": "dev", "version": "v3", "id": "q20", "runs": [1, 2, 3], "manual": "ambiguous",
+      "reason": "Same completed-orders-only reading as v2. Run 3 rounds to 0.05 (accepted by the corrected grader); runs 1 and 2 answer in percent (rejected)."
+    }
+  ]
+}

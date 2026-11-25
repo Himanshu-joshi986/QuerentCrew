@@ -12,5 +12,8 @@ data/*.db
 .streamlit/secrets.toml
 .ruff_cache
 docs/RESUME_AND_INTERVIEW.md
+docs/INTERVIEW_QA.md
+CLAUDE.local.md
+.claude
 tests
 .github
